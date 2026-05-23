@@ -332,6 +332,38 @@
     for (var i = 0; i < cards.length; i++) {
       processCard(cards[i]);
     }
+
+    if (hideShorts) {
+      hideShortsShelves();
+    }
+  }
+
+  function hideShortsShelves() {
+    // Find Shorts shelf containers that aren't regular card types.
+    // YouTube wraps Shorts shelves in ytd-item-section-renderer,
+    // ytd-shelf-renderer, ytd-rich-shelf-renderer, or ytd-reel-shelf-renderer.
+    // We walk up from every ytm-shorts-lockup-view-model to find and hide
+    // the nearest section-level container.
+    var shortsModels = document.querySelectorAll("ytm-shorts-lockup-view-model");
+    var hiddenContainers = [];
+
+    for (var i = 0; i < shortsModels.length; i++) {
+      var parent = shortsModels[i].parentElement;
+      for (var depth = 0; depth < 12 && parent; depth++) {
+        var tag = parent.tagName;
+        if (tag === "YTD-ITEM-SECTION-RENDERER" ||
+            tag === "YTD-SHELF-RENDERER" ||
+            tag === "YTD-RICH-SHELF-RENDERER" ||
+            tag === "YTD-REEL-SHELF-RENDERER") {
+          if (hiddenContainers.indexOf(parent) === -1) {
+            hideCard(parent, "Shorts shelf hidden");
+            hiddenContainers.push(parent);
+          }
+          break;
+        }
+        parent = parent.parentElement;
+      }
+    }
   }
 
   function processCard(card) {
@@ -494,16 +526,16 @@
   }
 
   function reprocessAllCards() {
-    // Reset all cards, then re-evaluate with current preferences
-    var cards = document.querySelectorAll(CARD_SELECTORS);
-    feedItemsHidden = 0;
-    for (var i = 0; i < cards.length; i++) {
-      cards[i].style.display = "";
-      delete cards[i].dataset.algocontrolHidden;
-      delete cards[i].dataset.algocontrolReason;
+    // Reset all cards AND Shorts shelf containers, then re-evaluate
+    var allHidden = document.querySelectorAll("[data-algocontrol-hidden='true']");
+    for (var h = 0; h < allHidden.length; h++) {
+      allHidden[h].style.display = "";
+      delete allHidden[h].dataset.algocontrolHidden;
+      delete allHidden[h].dataset.algocontrolReason;
     }
+    feedItemsHidden = 0;
     applyFiltersToDOM();
-    console.log("[AlgoControl] Reprocessed " + cards.length + " cards with updated preferences");
+    console.log("[AlgoControl] Reprocessed with updated preferences");
   }
 
   // --- Watch for new cards (infinite scroll / SPA navigation) ---
