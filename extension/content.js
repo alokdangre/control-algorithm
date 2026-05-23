@@ -230,6 +230,7 @@
   // --- DOM manipulation ---
   var CARD_SELECTORS = [
     "ytd-rich-item-renderer",
+    "yt-lockup-view-model",
     "ytd-compact-video-renderer",
     "ytd-video-renderer",
     "ytd-reel-shelf-renderer",
@@ -241,10 +242,17 @@
   ].join(", ");
 
   function getVideoIdFromCard(card) {
+    // Method 1: extract from content-id class (yt-lockup-view-model)
+    var contentDiv = card.querySelector("[class*='content-id-']") || card;
+    var classList = contentDiv.className || "";
+    var classMatch = classList.match(/content-id-([a-zA-Z0-9_-]+)/);
+    if (classMatch) return classMatch[1];
+
+    // Method 2: find any link with a video ID
     var link =
       card.querySelector("a#video-title-link") ||
       card.querySelector("a#video-title") ||
-      card.querySelector("a.yt-simple-endpoint[href*='watch']") ||
+      card.querySelector('a[href*="/watch?v="]') ||
       card.querySelector('a[href*="/shorts/"]') ||
       card.querySelector("a[href*='/playlist']");
     if (!link) return null;
@@ -255,55 +263,63 @@
   }
 
   function extractTitleFromCard(card) {
+    // Try selectors from most specific to most generic
     var el =
       card.querySelector("#video-title") ||
       card.querySelector("a#video-title-link") ||
-      card.querySelector("h3 #video-title") ||
       card.querySelector("h3 a") ||
-      card.querySelector("span#video-title") ||
-      card.querySelector("[id='video-title']");
+      card.querySelector("h3") ||
+      card.querySelector("span#video-title");
 
-    if (!el) return "";
+    if (el) {
+      var title = (
+        el.getAttribute("title") ||
+        el.innerText ||
+        el.textContent ||
+        ""
+      ).trim();
+      if (title) return title;
+    }
 
-    var title = (
-      el.getAttribute("title") ||
-      el.innerText ||
-      el.textContent ||
-      ""
-    ).trim();
+    // Fallback: any link with a title attribute
+    var titled = card.querySelector('a[title]');
+    if (titled) {
+      var t = (titled.getAttribute("title") || "").trim();
+      if (t) return t;
+    }
 
-    // If we got a title from the element, use it
-    if (title) return title;
-
-    // Last resort: check aria-label on the card's main link
-    var mainLink = card.querySelector("a[aria-label]");
-    if (mainLink) {
-      return (mainLink.getAttribute("aria-label") || "").trim();
+    // Last resort: aria-label on a link
+    var labeled = card.querySelector("a[aria-label]");
+    if (labeled) {
+      return (labeled.getAttribute("aria-label") || "").trim();
     }
 
     return "";
   }
 
   function extractChannelFromCard(card) {
+    // Most reliable: any link pointing to a channel page (/@username)
+    // This works across ALL YouTube component types
+    var channelLink = card.querySelector('a[href*="/@"]');
+    if (channelLink) {
+      var text = (channelLink.innerText || channelLink.textContent || "").trim();
+      if (text) return text;
+    }
+
+    // Legacy selectors for older YouTube components
     var el =
       card.querySelector("ytd-channel-name a") ||
       card.querySelector("ytd-channel-name yt-formatted-string") ||
-      card.querySelector("ytd-channel-name #text") ||
       card.querySelector("#channel-name a") ||
-      card.querySelector("#channel-name yt-formatted-string") ||
-      card.querySelector("#channel-name #text") ||
-      card.querySelector("div.ytd-channel-name") ||
+      card.querySelector("#channel-name") ||
       card.querySelector("#byline a") ||
-      card.querySelector("#byline") ||
-      card.querySelector(".ytd-video-meta-block a.yt-simple-endpoint[href*='/@']") ||
-      card.querySelector("a.yt-simple-endpoint[href*='/@']");
+      card.querySelector("#byline");
 
     if (!el) return "";
 
     return (
       el.innerText ||
       el.textContent ||
-      el.getAttribute("aria-label") ||
       ""
     ).trim();
   }
@@ -320,6 +336,13 @@
   function processCard(card) {
     if (!enabled) {
       showCard(card);
+      return;
+    }
+
+    // Skip yt-lockup-view-model if it's inside ytd-rich-item-renderer
+    // (the parent will handle it — hiding the child leaves an empty shell)
+    if (card.tagName === "YT-LOCKUP-VIEW-MODEL" &&
+        card.closest("ytd-rich-item-renderer")) {
       return;
     }
 
@@ -396,28 +419,36 @@
       return true;
     }
 
-    // Link points to /shorts/
+    // Any link points to /shorts/
     if (card.querySelector('a[href*="/shorts/"]')) {
       return true;
     }
 
-    // Overlay badge says "SHORTS" or the Shorts icon is present
-    var overlayText = card.querySelector("[overlay-style='SHORTS']") ||
-                      card.querySelector("ytd-thumbnail-overlay-time-status-renderer[overlay-style='SHORTS']");
-    if (overlayText) {
+    // Overlay badge attribute (old YouTube components)
+    if (card.querySelector("[overlay-style='SHORTS']") ||
+        card.querySelector("ytd-thumbnail-overlay-time-status-renderer[overlay-style='SHORTS']")) {
       return true;
     }
 
-    // Check aria-label or overlay text for "Shorts" indicator
+    // Badge text says "SHORTS" (old components)
     var badges = card.querySelectorAll("ytd-thumbnail-overlay-time-status-renderer");
     for (var b = 0; b < badges.length; b++) {
       var badgeText = (badges[b].innerText || badges[b].textContent || "").trim().toUpperCase();
-      if (badgeText === "SHORTS" || badgeText === "SHORT") {
-        return true;
-      }
-      var style = badges[b].getAttribute("overlay-style");
-      if (style === "SHORTS") return true;
+      if (badgeText === "SHORTS" || badgeText === "SHORT") return true;
+      if (badges[b].getAttribute("overlay-style") === "SHORTS") return true;
     }
+
+    // New yt-lockup-view-model: check badge-shape text and thumbnail badge
+    var newBadges = card.querySelectorAll("badge-shape, yt-thumbnail-badge-view-model");
+    for (var n = 0; n < newBadges.length; n++) {
+      var nbText = (newBadges[n].innerText || newBadges[n].textContent || "").trim().toUpperCase();
+      if (nbText === "SHORTS" || nbText === "SHORT") return true;
+    }
+
+    // Check if class contains "shorts" indicator
+    var outerClass = (card.className || "") + " " + (card.innerHTML ? "" : "");
+    var innerDiv = card.querySelector("[class*='Shorts'], [class*='shorts'], [class*='reel']");
+    if (innerDiv) return true;
 
     return false;
   }
@@ -549,5 +580,82 @@
     setTimeout(applyFiltersToDOM, 4000);
   });
 
+  // --- Diagnostic: expose scan function to window for debugging ---
+  // Run algocontrolDiag() in DevTools console to see what YouTube elements exist
+  window.addEventListener("message", function (event) {
+    if (event.data && event.data.type === "ALGOCONTROL_DIAG") {
+      runDiagnostic();
+    }
+  });
+
+  function runDiagnostic() {
+    var allCustomElements = document.querySelectorAll("*");
+    var tagCounts = {};
+    var ytTags = {};
+
+    for (var i = 0; i < allCustomElements.length; i++) {
+      var tag = allCustomElements[i].tagName.toLowerCase();
+      if (tag.startsWith("ytd-") || tag.startsWith("yt-")) {
+        if (!ytTags[tag]) ytTags[tag] = 0;
+        ytTags[tag]++;
+      }
+    }
+
+    // Find all elements that contain video links
+    var videoLinks = document.querySelectorAll('a[href*="watch?v="], a[href*="/shorts/"]');
+    var cardParents = {};
+    for (var v = 0; v < videoLinks.length; v++) {
+      var parent = videoLinks[v];
+      for (var depth = 0; depth < 8; depth++) {
+        parent = parent.parentElement;
+        if (!parent) break;
+        var pTag = parent.tagName.toLowerCase();
+        if (pTag.startsWith("ytd-") || pTag.startsWith("yt-")) {
+          if (!cardParents[pTag]) {
+            cardParents[pTag] = { count: 0, sample: null };
+          }
+          cardParents[pTag].count++;
+          if (!cardParents[pTag].sample) {
+            var titleEl = parent.querySelector("#video-title, [id='video-title'], h3 a, span#video-title");
+            var channelEl = parent.querySelector("ytd-channel-name a, a[href*='/@'], #channel-name, #byline");
+            cardParents[pTag].sample = {
+              title: titleEl ? (titleEl.getAttribute("title") || titleEl.innerText || "").substring(0, 60) : "(no title found)",
+              channel: channelEl ? (channelEl.innerText || "").substring(0, 40) : "(no channel found)",
+              titleSelector: titleEl ? titleEl.tagName + "#" + (titleEl.id || "") + "." + (titleEl.className || "").substring(0, 30) : "NONE",
+              channelSelector: channelEl ? channelEl.tagName + "#" + (channelEl.id || "") : "NONE",
+            };
+          }
+          break;
+        }
+      }
+    }
+
+    // Find playlist/mix elements
+    var playlistLinks = document.querySelectorAll('a[href*="list="]');
+    var playlistParents = {};
+    for (var p = 0; p < playlistLinks.length; p++) {
+      var pp = playlistLinks[p];
+      for (var d2 = 0; d2 < 8; d2++) {
+        pp = pp.parentElement;
+        if (!pp) break;
+        var ppTag = pp.tagName.toLowerCase();
+        if (ppTag.startsWith("ytd-")) {
+          if (!playlistParents[ppTag]) playlistParents[ppTag] = 0;
+          playlistParents[ppTag]++;
+          break;
+        }
+      }
+    }
+
+    console.log("%c[AlgoControl DIAGNOSTIC]", "color: #3ea6ff; font-size: 14px; font-weight: bold;");
+    console.log("%cPage:", "font-weight:bold", window.location.pathname);
+    console.log("%cAll ytd-/yt- elements on page:", "font-weight:bold", ytTags);
+    console.log("%cVideo card containers (parent of watch/shorts links):", "font-weight:bold", cardParents);
+    console.log("%cPlaylist containers (parent of list= links):", "font-weight:bold", playlistParents);
+    console.log("%cCurrently tracked by AlgoControl:", "font-weight:bold", Object.keys(videoDataMap).length, "videos");
+    console.log("%cCards matching our selectors:", "font-weight:bold", document.querySelectorAll(CARD_SELECTORS).length);
+  }
+
   console.log("[AlgoControl] Content script loaded — waiting for feed data");
+  console.log("[AlgoControl] To run diagnostics, paste this in console: window.postMessage({type:'ALGOCONTROL_DIAG'}, '*')");
 })();
