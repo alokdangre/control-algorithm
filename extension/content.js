@@ -235,6 +235,7 @@
     "ytd-video-renderer",
     "ytd-reel-shelf-renderer",
     "ytd-reel-item-renderer",
+    "ytd-rich-shelf-renderer",
     "ytd-radio-renderer",
     "ytd-playlist-renderer",
     "ytd-compact-radio-renderer",
@@ -419,36 +420,39 @@
       return true;
     }
 
+    // New YouTube Shorts components (ytm-shorts-lockup-view-model)
+    if (card.querySelector("ytm-shorts-lockup-view-model") ||
+        card.querySelector("ytm-shorts-lockup-view-model-v2")) {
+      return true;
+    }
+
+    // Shelf containing Shorts (ytd-rich-shelf-renderer with Shorts inside)
+    if (card.tagName === "YTD-RICH-SHELF-RENDERER" &&
+        (card.querySelector("ytm-shorts-lockup-view-model") ||
+         card.querySelector('a[href*="/shorts/"]'))) {
+      return true;
+    }
+
     // Any link points to /shorts/
     if (card.querySelector('a[href*="/shorts/"]')) {
       return true;
     }
 
-    // Overlay badge attribute (old YouTube components)
-    if (card.querySelector("[overlay-style='SHORTS']") ||
-        card.querySelector("ytd-thumbnail-overlay-time-status-renderer[overlay-style='SHORTS']")) {
+    // Overlay badge attribute
+    if (card.querySelector("[overlay-style='SHORTS']")) {
       return true;
     }
 
-    // Badge text says "SHORTS" (old components)
-    var badges = card.querySelectorAll("ytd-thumbnail-overlay-time-status-renderer");
+    // Badge text says "SHORTS"
+    var badges = card.querySelectorAll(
+      "ytd-thumbnail-overlay-time-status-renderer, badge-shape, yt-thumbnail-badge-view-model"
+    );
     for (var b = 0; b < badges.length; b++) {
       var badgeText = (badges[b].innerText || badges[b].textContent || "").trim().toUpperCase();
       if (badgeText === "SHORTS" || badgeText === "SHORT") return true;
-      if (badges[b].getAttribute("overlay-style") === "SHORTS") return true;
+      var style = badges[b].getAttribute("overlay-style");
+      if (style === "SHORTS") return true;
     }
-
-    // New yt-lockup-view-model: check badge-shape text and thumbnail badge
-    var newBadges = card.querySelectorAll("badge-shape, yt-thumbnail-badge-view-model");
-    for (var n = 0; n < newBadges.length; n++) {
-      var nbText = (newBadges[n].innerText || newBadges[n].textContent || "").trim().toUpperCase();
-      if (nbText === "SHORTS" || nbText === "SHORT") return true;
-    }
-
-    // Check if class contains "shorts" indicator
-    var outerClass = (card.className || "") + " " + (card.innerHTML ? "" : "");
-    var innerDiv = card.querySelector("[class*='Shorts'], [class*='shorts'], [class*='reel']");
-    if (innerDiv) return true;
 
     return false;
   }
