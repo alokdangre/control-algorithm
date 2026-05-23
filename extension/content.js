@@ -338,30 +338,57 @@
     }
   }
 
+  // Only inherently-Shorts shelves are safe to hide via walk-up. The main
+  // search/home results list is itself a YTD-ITEM-SECTION-RENDERER, so we must
+  // NOT stop there — that's reached only via the exact-title guard below.
+  var SHELF_CONTAINER_TAGS = {
+    "YTD-SHELF-RENDERER": true,
+    "YTD-RICH-SHELF-RENDERER": true,
+    "YTD-REEL-SHELF-RENDERER": true,
+  };
+
   function hideShortsShelves() {
-    // Find Shorts shelf containers that aren't regular card types.
-    // YouTube wraps Shorts shelves in ytd-item-section-renderer,
-    // ytd-shelf-renderer, ytd-rich-shelf-renderer, or ytd-reel-shelf-renderer.
-    // We walk up from every ytm-shorts-lockup-view-model to find and hide
-    // the nearest section-level container.
-    var shortsModels = document.querySelectorAll("ytm-shorts-lockup-view-model");
     var hiddenContainers = [];
 
-    for (var i = 0; i < shortsModels.length; i++) {
-      var parent = shortsModels[i].parentElement;
+    function hideNearestShelf(node) {
+      var parent = node.parentElement;
       for (var depth = 0; depth < 12 && parent; depth++) {
-        var tag = parent.tagName;
-        if (tag === "YTD-ITEM-SECTION-RENDERER" ||
-            tag === "YTD-SHELF-RENDERER" ||
-            tag === "YTD-RICH-SHELF-RENDERER" ||
-            tag === "YTD-REEL-SHELF-RENDERER") {
+        if (SHELF_CONTAINER_TAGS[parent.tagName]) {
           if (hiddenContainers.indexOf(parent) === -1) {
             hideCard(parent, "Shorts shelf hidden");
             hiddenContainers.push(parent);
           }
-          break;
+          return;
         }
         parent = parent.parentElement;
+      }
+    }
+
+    // 1. Walk up from Shorts lockups to their dedicated shelf container.
+    //    (Not /shorts/ links — those match inline result thumbnails too.)
+    var seeds = document.querySelectorAll(
+      "ytm-shorts-lockup-view-model, ytm-shorts-lockup-view-model-v2"
+    );
+    for (var i = 0; i < seeds.length; i++) {
+      hideNearestShelf(seeds[i]);
+    }
+
+    // 2. Title-based detection (Unhook-style): hide any shelf whose header
+    //    reads "Shorts", catching sections that don't expose a lockup yet.
+    var shelves = document.querySelectorAll(
+      "ytd-item-section-renderer, ytd-shelf-renderer, ytd-rich-shelf-renderer, ytd-reel-shelf-renderer"
+    );
+    for (var s = 0; s < shelves.length; s++) {
+      if (hiddenContainers.indexOf(shelves[s]) !== -1) continue;
+      var titleEl = shelves[s].querySelector(
+        "#title, .title, h2, span#title-text, yt-formatted-string#title"
+      );
+      var titleText = titleEl
+        ? (titleEl.innerText || titleEl.textContent || "").trim().toLowerCase()
+        : "";
+      if (titleText === "shorts") {
+        hideCard(shelves[s], "Shorts shelf hidden (title)");
+        hiddenContainers.push(shelves[s]);
       }
     }
   }
