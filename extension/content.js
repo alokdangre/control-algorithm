@@ -325,8 +325,47 @@
     ).trim();
   }
 
+  // --- CSS-based Shorts hiding (applied instantly, no timing issues) ---
+  var _shortsCssEl = null;
+
+  // CSS uses :has() to match a pure Shorts section — one that contains
+  // ytm-shorts-lockup-view-model but no regular yt-lockup-view-model.
+  // This is evaluated by the browser as elements appear, zero timing lag.
+  var SHORTS_CSS = [
+    // Always-Shorts shelf renderers
+    "ytd-reel-shelf-renderer { display: none !important; }",
+    "ytd-reel-item-renderer { display: none !important; }",
+    // Rich shelf that contains Shorts lockups
+    "ytd-rich-shelf-renderer:has(ytm-shorts-lockup-view-model) { display: none !important; }",
+    // Search/home section that is a pure Shorts shelf (no regular videos inside)
+    "ytd-item-section-renderer:has(ytm-shorts-lockup-view-model):not(:has(yt-lockup-view-model, ytd-video-renderer, ytd-compact-video-renderer)) { display: none !important; }",
+    // Individual Shorts lockup components in results
+    "ytm-shorts-lockup-view-model { display: none !important; }",
+    "ytm-shorts-lockup-view-model-v2 { display: none !important; }",
+  ].join("\n");
+
+  function applyShortsCss() {
+    if (_shortsCssEl) return;
+    _shortsCssEl = document.createElement("style");
+    _shortsCssEl.id = "algocontrol-shorts-css";
+    _shortsCssEl.textContent = SHORTS_CSS;
+    (document.head || document.documentElement).appendChild(_shortsCssEl);
+    console.log("[AlgoControl] Shorts CSS injected");
+  }
+
+  function removeShortsCss() {
+    if (_shortsCssEl) {
+      _shortsCssEl.remove();
+      _shortsCssEl = null;
+      console.log("[AlgoControl] Shorts CSS removed");
+    }
+  }
+
   function applyFiltersToDOM() {
-    if (!enabled) return;
+    if (!enabled) {
+      removeShortsCss();
+      return;
+    }
 
     var cards = document.querySelectorAll(CARD_SELECTORS);
     for (var i = 0; i < cards.length; i++) {
@@ -334,82 +373,9 @@
     }
 
     if (hideShorts) {
-      hideShortsShelves();
-    }
-  }
-
-  // Only inherently-Shorts shelves are safe to hide via walk-up. The main
-  // search/home results list is itself a YTD-ITEM-SECTION-RENDERER, so we must
-  // NOT stop there — that's reached only via the exact-title guard below.
-  var SHELF_CONTAINER_TAGS = {
-    "YTD-SHELF-RENDERER": true,
-    "YTD-RICH-SHELF-RENDERER": true,
-    "YTD-REEL-SHELF-RENDERER": true,
-  };
-
-  function hideShortsShelves() {
-    var hiddenContainers = [];
-
-    function hideNearestShelf(node) {
-      var parent = node.parentElement;
-      for (var depth = 0; depth < 12 && parent; depth++) {
-        if (SHELF_CONTAINER_TAGS[parent.tagName]) {
-          if (hiddenContainers.indexOf(parent) === -1) {
-            hideCard(parent, "Shorts shelf hidden");
-            hiddenContainers.push(parent);
-          }
-          return;
-        }
-        parent = parent.parentElement;
-      }
-    }
-
-    // 1. Walk up from Shorts lockups to their dedicated shelf container.
-    //    (Not /shorts/ links — those match inline result thumbnails too.)
-    var seeds = document.querySelectorAll(
-      "ytm-shorts-lockup-view-model, ytm-shorts-lockup-view-model-v2"
-    );
-    for (var i = 0; i < seeds.length; i++) {
-      hideNearestShelf(seeds[i]);
-    }
-
-    // 2. Section-level detection for ytd-item-section-renderer.
-    //    A section is a pure Shorts shelf if it contains ytm-shorts-lockup-view-model
-    //    but does NOT contain yt-lockup-view-model (regular videos).
-    //    Mixed sections (regular results that happen to have inline shorts links)
-    //    contain both — those must not be hidden.
-    var sections = document.querySelectorAll("ytd-item-section-renderer");
-    for (var s = 0; s < sections.length; s++) {
-      if (hiddenContainers.indexOf(sections[s]) !== -1) continue;
-      var hasShortsLockup = !!sections[s].querySelector("ytm-shorts-lockup-view-model, ytm-shorts-lockup-view-model-v2");
-      var hasRegularVideo = !!sections[s].querySelector("yt-lockup-view-model, ytd-video-renderer, ytd-compact-video-renderer");
-      if (hasShortsLockup && !hasRegularVideo) {
-        hideCard(sections[s], "Shorts shelf hidden (section)");
-        hiddenContainers.push(sections[s]);
-        continue;
-      }
-      // Fallback: h2 header exactly says "Shorts" (catches other shelf layouts)
-      var h2El = sections[s].querySelector("h2");
-      var h2Text = h2El ? (h2El.innerText || h2El.textContent || "").trim().toLowerCase() : "";
-      if (h2Text === "shorts") {
-        hideCard(sections[s], "Shorts shelf hidden (h2)");
-        hiddenContainers.push(sections[s]);
-      }
-    }
-
-    // 3. Title-based detection for non-item-section shelf types.
-    var otherShelves = document.querySelectorAll(
-      "ytd-shelf-renderer, ytd-rich-shelf-renderer, ytd-reel-shelf-renderer"
-    );
-    for (var r = 0; r < otherShelves.length; r++) {
-      if (hiddenContainers.indexOf(otherShelves[r]) !== -1) continue;
-      var shelfH2 = otherShelves[r].querySelector("h2, #title, yt-formatted-string#title");
-      var shelfTitle = shelfH2 ? (shelfH2.innerText || shelfH2.textContent || "").trim().toLowerCase() : "";
-      if (shelfTitle === "shorts" ||
-          !!otherShelves[r].querySelector("ytm-shorts-lockup-view-model, ytm-shorts-lockup-view-model-v2")) {
-        hideCard(otherShelves[r], "Shorts shelf hidden (other)");
-        hiddenContainers.push(otherShelves[r]);
-      }
+      applyShortsCss();
+    } else {
+      removeShortsCss();
     }
   }
 
@@ -586,19 +552,8 @@
   }
 
   // --- Watch for new cards (infinite scroll / SPA navigation) ---
-  var _shortsShelfTimer = null;
-  function scheduleShortsShelfCheck() {
-    if (!hideShorts) return;
-    if (_shortsShelfTimer) clearTimeout(_shortsShelfTimer);
-    _shortsShelfTimer = setTimeout(function () {
-      _shortsShelfTimer = null;
-      hideShortsShelves();
-    }, 300);
-  }
-
   function observeFeed() {
     var observer = new MutationObserver(function (mutations) {
-      var needsShortsCheck = false;
       for (var i = 0; i < mutations.length; i++) {
         var nodes = mutations[i].addedNodes;
         for (var j = 0; j < nodes.length; j++) {
@@ -615,19 +570,8 @@
           for (var k = 0; k < inner.length; k++) {
             processCard(inner[k]);
           }
-
-          // Any section-level element added means a Shorts shelf may have appeared
-          if (node.tagName && (
-            node.tagName === "YTD-ITEM-SECTION-RENDERER" ||
-            node.tagName === "YTD-SECTION-LIST-RENDERER" ||
-            node.tagName === "YTD-REEL-SHELF-RENDERER" ||
-            node.tagName === "YTD-RICH-SHELF-RENDERER"
-          )) {
-            needsShortsCheck = true;
-          }
         }
       }
-      if (needsShortsCheck) scheduleShortsShelfCheck();
     });
 
     observer.observe(document.documentElement, {
