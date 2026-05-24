@@ -6,7 +6,7 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      width: 360px;
+      width: 380px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: #0f0f0f;
       color: #e8e8e8;
@@ -27,23 +27,13 @@
       color: #fff;
     }
 
-    .toggle-container {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
     .toggle {
       position: relative;
       width: 40px;
       height: 22px;
     }
 
-    .toggle input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
 
     .toggle-slider {
       position: absolute;
@@ -66,17 +56,12 @@
       transition: transform 0.2s;
     }
 
-    .toggle input:checked + .toggle-slider {
-      background: #3ea6ff;
-    }
-
-    .toggle input:checked + .toggle-slider::before {
-      transform: translateX(18px);
-    }
+    .toggle input:checked + .toggle-slider { background: #3ea6ff; }
+    .toggle input:checked + .toggle-slider::before { transform: translateX(18px); }
 
     .stats {
       display: flex;
-      gap: 12px;
+      gap: 10px;
       padding: 12px 16px;
       background: #1a1a1a;
       border-bottom: 1px solid #272727;
@@ -91,28 +76,28 @@
     }
 
     .stat-value {
-      font-size: 22px;
+      font-size: 20px;
       font-weight: 700;
       color: #3ea6ff;
     }
 
     .stat-label {
-      font-size: 11px;
+      font-size: 10px;
       color: #888;
       margin-top: 2px;
     }
 
     .section {
-      padding: 14px 16px;
-      border-bottom: 1px solid #272727;
+      padding: 12px 16px;
+      border-bottom: 1px solid #1e1e1e;
     }
 
     .section-title {
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 600;
-      color: #888;
+      color: #666;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.6px;
       margin-bottom: 10px;
     }
 
@@ -120,20 +105,44 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 6px 0;
+      padding: 5px 0;
     }
 
     .checkbox-row input[type="checkbox"] {
       accent-color: #3ea6ff;
-      width: 16px;
-      height: 16px;
-    }
-
-    .checkbox-row label {
+      width: 15px;
+      height: 15px;
       cursor: pointer;
-      color: #ccc;
     }
 
+    .checkbox-row label { cursor: pointer; color: #ccc; }
+
+    /* Duration row */
+    .duration-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .duration-row label { color: #888; font-size: 12px; }
+
+    .duration-input {
+      width: 64px;
+      padding: 6px 8px;
+      border: 1px solid #333;
+      border-radius: 6px;
+      background: #1a1a1a;
+      color: #e8e8e8;
+      font-size: 13px;
+      outline: none;
+      text-align: center;
+    }
+
+    .duration-input:focus { border-color: #3ea6ff; }
+    .duration-unit { color: #555; font-size: 12px; }
+
+    /* Input + button */
     .input-group {
       display: flex;
       gap: 6px;
@@ -142,7 +151,7 @@
 
     .input-group input {
       flex: 1;
-      padding: 8px 10px;
+      padding: 7px 10px;
       border: 1px solid #333;
       border-radius: 6px;
       background: #1a1a1a;
@@ -151,16 +160,11 @@
       outline: none;
     }
 
-    .input-group input:focus {
-      border-color: #3ea6ff;
-    }
-
-    .input-group input::placeholder {
-      color: #555;
-    }
+    .input-group input:focus { border-color: #3ea6ff; }
+    .input-group input::placeholder { color: #444; }
 
     .btn {
-      padding: 8px 14px;
+      padding: 7px 13px;
       border: none;
       border-radius: 6px;
       cursor: pointer;
@@ -168,48 +172,47 @@
       font-weight: 500;
     }
 
-    .btn-add {
-      background: #3ea6ff;
-      color: #000;
-    }
+    .btn-add { background: #3ea6ff; color: #000; }
+    .btn-add:hover { background: #65b8ff; }
 
-    .btn-add:hover {
-      background: #65b8ff;
-    }
+    .btn-add-green { background: #2d9e5f; color: #fff; }
+    .btn-add-green:hover { background: #37b870; }
 
+    /* Tags */
     .tag-list {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
+      gap: 5px;
     }
 
     .tag {
       display: flex;
       align-items: center;
       gap: 4px;
-      padding: 4px 10px;
+      padding: 3px 9px;
       background: #272727;
-      border-radius: 14px;
+      border-radius: 12px;
       font-size: 12px;
       color: #ccc;
     }
 
+    .tag.tag-whitelist {
+      background: #1a2e22;
+      border: 1px solid #2d9e5f44;
+      color: #5dba87;
+    }
+
     .tag-remove {
       cursor: pointer;
-      color: #888;
+      color: #666;
       font-size: 14px;
       line-height: 1;
     }
 
-    .tag-remove:hover {
-      color: #ff4444;
-    }
+    .tag-remove:hover { color: #ff4444; }
+    .tag.tag-whitelist .tag-remove:hover { color: #ff8888; }
 
-    .empty-msg {
-      color: #555;
-      font-size: 12px;
-      font-style: italic;
-    }
+    .empty-msg { color: #444; font-size: 12px; font-style: italic; }
 
     .status-bar {
       padding: 10px 16px;
@@ -218,25 +221,18 @@
       text-align: center;
     }
 
-    .status-active {
-      color: #4caf50;
-    }
-
-    .status-inactive {
-      color: #888;
-    }
+    .status-active { color: #4caf50; }
+    .status-inactive { color: #888; }
   </style>
 </head>
 <body>
 
   <div class="header">
     <h1>AlgoControl</h1>
-    <div class="toggle-container">
-      <label class="toggle">
-        <input type="checkbox" id="enableToggle" checked>
-        <span class="toggle-slider"></span>
-      </label>
-    </div>
+    <label class="toggle">
+      <input type="checkbox" id="enableToggle" checked>
+      <span class="toggle-slider"></span>
+    </label>
   </div>
 
   <div class="stats">
@@ -254,23 +250,47 @@
     </div>
   </div>
 
+  <!-- Quick Filters -->
   <div class="section">
     <div class="section-title">Quick Filters</div>
     <div class="checkbox-row">
       <input type="checkbox" id="hideShorts">
-      <label for="hideShorts">Hide YouTube Shorts</label>
+      <label for="hideShorts">Hide Shorts</label>
+    </div>
+    <div class="checkbox-row">
+      <input type="checkbox" id="hideLiveStreams">
+      <label for="hideLiveStreams">Hide Live Streams</label>
+    </div>
+    <div class="checkbox-row">
+      <input type="checkbox" id="hidePremieres">
+      <label for="hidePremieres">Hide Premieres</label>
     </div>
   </div>
 
+  <!-- Duration Filter -->
+  <div class="section">
+    <div class="section-title">Duration Filter</div>
+    <div class="duration-row">
+      <label>Min</label>
+      <input type="number" class="duration-input" id="minDuration" min="0" placeholder="0">
+      <span class="duration-unit">min</span>
+      <label style="margin-left:8px">Max</label>
+      <input type="number" class="duration-input" id="maxDuration" min="0" placeholder="0">
+      <span class="duration-unit">min &nbsp;(0 = off)</span>
+    </div>
+  </div>
+
+  <!-- Blocked Keywords -->
   <div class="section">
     <div class="section-title">Blocked Keywords</div>
     <div class="input-group">
-      <input type="text" id="keywordInput" placeholder="e.g. drama, reaction, prank">
+      <input type="text" id="keywordInput" placeholder="e.g. drama, reaction">
       <button class="btn btn-add" id="addKeyword">Add</button>
     </div>
     <div class="tag-list" id="keywordTags"></div>
   </div>
 
+  <!-- Blocked Channels -->
   <div class="section">
     <div class="section-title">Blocked Channels</div>
     <div class="input-group">
@@ -278,6 +298,16 @@
       <button class="btn btn-add" id="addChannel">Add</button>
     </div>
     <div class="tag-list" id="channelTags"></div>
+  </div>
+
+  <!-- Whitelisted Channels -->
+  <div class="section">
+    <div class="section-title">Whitelisted Channels <span style="color:#2d9e5f;font-size:10px;font-weight:400;text-transform:none">(always show)</span></div>
+    <div class="input-group">
+      <input type="text" id="whitelistInput" placeholder="e.g. Kurzgesagt, Veritasium">
+      <button class="btn btn-add-green" id="addWhitelist">Add</button>
+    </div>
+    <div class="tag-list" id="whitelistTags"></div>
   </div>
 
   <div class="status-bar">
