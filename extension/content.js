@@ -586,8 +586,19 @@
   }
 
   // --- Watch for new cards (infinite scroll / SPA navigation) ---
+  var _shortsShelfTimer = null;
+  function scheduleShortsShelfCheck() {
+    if (!hideShorts) return;
+    if (_shortsShelfTimer) clearTimeout(_shortsShelfTimer);
+    _shortsShelfTimer = setTimeout(function () {
+      _shortsShelfTimer = null;
+      hideShortsShelves();
+    }, 300);
+  }
+
   function observeFeed() {
     var observer = new MutationObserver(function (mutations) {
+      var needsShortsCheck = false;
       for (var i = 0; i < mutations.length; i++) {
         var nodes = mutations[i].addedNodes;
         for (var j = 0; j < nodes.length; j++) {
@@ -604,8 +615,19 @@
           for (var k = 0; k < inner.length; k++) {
             processCard(inner[k]);
           }
+
+          // Any section-level element added means a Shorts shelf may have appeared
+          if (node.tagName && (
+            node.tagName === "YTD-ITEM-SECTION-RENDERER" ||
+            node.tagName === "YTD-SECTION-LIST-RENDERER" ||
+            node.tagName === "YTD-REEL-SHELF-RENDERER" ||
+            node.tagName === "YTD-RICH-SHELF-RENDERER"
+          )) {
+            needsShortsCheck = true;
+          }
         }
       }
+      if (needsShortsCheck) scheduleShortsShelfCheck();
     });
 
     observer.observe(document.documentElement, {
