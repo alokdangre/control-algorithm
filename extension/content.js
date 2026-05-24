@@ -373,22 +373,42 @@
       hideNearestShelf(seeds[i]);
     }
 
-    // 2. Title-based detection (Unhook-style): hide any shelf whose header
-    //    reads "Shorts", catching sections that don't expose a lockup yet.
-    var shelves = document.querySelectorAll(
-      "ytd-item-section-renderer, ytd-shelf-renderer, ytd-rich-shelf-renderer, ytd-reel-shelf-renderer"
+    // 2. Section-level detection for ytd-item-section-renderer.
+    //    A section is a pure Shorts shelf if it contains ytm-shorts-lockup-view-model
+    //    but does NOT contain yt-lockup-view-model (regular videos).
+    //    Mixed sections (regular results that happen to have inline shorts links)
+    //    contain both — those must not be hidden.
+    var sections = document.querySelectorAll("ytd-item-section-renderer");
+    for (var s = 0; s < sections.length; s++) {
+      if (hiddenContainers.indexOf(sections[s]) !== -1) continue;
+      var hasShortsLockup = !!sections[s].querySelector("ytm-shorts-lockup-view-model, ytm-shorts-lockup-view-model-v2");
+      var hasRegularVideo = !!sections[s].querySelector("yt-lockup-view-model, ytd-video-renderer, ytd-compact-video-renderer");
+      if (hasShortsLockup && !hasRegularVideo) {
+        hideCard(sections[s], "Shorts shelf hidden (section)");
+        hiddenContainers.push(sections[s]);
+        continue;
+      }
+      // Fallback: h2 header exactly says "Shorts" (catches other shelf layouts)
+      var h2El = sections[s].querySelector("h2");
+      var h2Text = h2El ? (h2El.innerText || h2El.textContent || "").trim().toLowerCase() : "";
+      if (h2Text === "shorts") {
+        hideCard(sections[s], "Shorts shelf hidden (h2)");
+        hiddenContainers.push(sections[s]);
+      }
+    }
+
+    // 3. Title-based detection for non-item-section shelf types.
+    var otherShelves = document.querySelectorAll(
+      "ytd-shelf-renderer, ytd-rich-shelf-renderer, ytd-reel-shelf-renderer"
     );
-    for (var s = 0; s < shelves.length; s++) {
-      if (hiddenContainers.indexOf(shelves[s]) !== -1) continue;
-      var titleEl = shelves[s].querySelector(
-        "#title, .title, h2, span#title-text, yt-formatted-string#title"
-      );
-      var titleText = titleEl
-        ? (titleEl.innerText || titleEl.textContent || "").trim().toLowerCase()
-        : "";
-      if (titleText === "shorts") {
-        hideCard(shelves[s], "Shorts shelf hidden (title)");
-        hiddenContainers.push(shelves[s]);
+    for (var r = 0; r < otherShelves.length; r++) {
+      if (hiddenContainers.indexOf(otherShelves[r]) !== -1) continue;
+      var shelfH2 = otherShelves[r].querySelector("h2, #title, yt-formatted-string#title");
+      var shelfTitle = shelfH2 ? (shelfH2.innerText || shelfH2.textContent || "").trim().toLowerCase() : "";
+      if (shelfTitle === "shorts" ||
+          !!otherShelves[r].querySelector("ytm-shorts-lockup-view-model, ytm-shorts-lockup-view-model-v2")) {
+        hideCard(otherShelves[r], "Shorts shelf hidden (other)");
+        hiddenContainers.push(otherShelves[r]);
       }
     }
   }
