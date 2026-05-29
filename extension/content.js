@@ -16,6 +16,7 @@
   var hidePremieres = false;
   var minDurationSec = 0;
   var maxDurationSec = 0;
+  var channelSignals = {};   // { "Channel Name": integer in [-3, +3] }
 
   // --- Load preferences ---
   function loadPreferences() {
@@ -29,6 +30,7 @@
       hidePremieres: false,
       minDurationSec: 0,
       maxDurationSec: 0,
+      channelSignals: {},
     }).then(function (prefs) {
       enabled = prefs.enabled;
       blockedKeywords = prefs.blockedKeywords.map(function (k) {
@@ -45,6 +47,7 @@
       hidePremieres = prefs.hidePremieres;
       minDurationSec = prefs.minDurationSec || 0;
       maxDurationSec = prefs.maxDurationSec || 0;
+      channelSignals = prefs.channelSignals || {};
     });
   }
 
@@ -234,6 +237,47 @@
     return false;
   }
 
+  // --- Channel signals (More/Less like this) ---
+  function getChannelSignal(channelName) {
+    if (!channelName) return 0;
+    return channelSignals[channelName.trim()] || 0;
+  }
+
+  // direction: +1 (like) or -1 (dislike)
+  // Same direction → increment further. Opposite direction → cancel to 0.
+  function applyChannelSignal(channelName, direction) {
+    if (!channelName) return;
+    var name = channelName.trim();
+    if (!name) return;
+    var current = channelSignals[name] || 0;
+    var next;
+    if (current === 0) {
+      next = direction;
+    } else if ((current > 0 && direction > 0) || (current < 0 && direction < 0)) {
+      next = current + direction;
+    } else {
+      next = 0;
+    }
+    if (next > 3) next = 3;
+    if (next < -3) next = -3;
+    if (next === 0) {
+      delete channelSignals[name];
+    } else {
+      channelSignals[name] = next;
+    }
+    chrome.storage.local.set({ channelSignals: channelSignals });
+    scheduleReprocess();
+  }
+
+  var _reprocessTimer = null;
+  function scheduleReprocess() {
+    if (_reprocessTimer) clearTimeout(_reprocessTimer);
+    _reprocessTimer = setTimeout(function () {
+      _reprocessTimer = null;
+      reprocessAllCards();
+    }, 200);
+  }
+
   // --- Decide whether a video should be hidden ---
   function shouldHideVideo(video) {
     if (!enabled) return { hide: false, reason: "" };
@@ -241,6 +285,11 @@
     // Whitelist overrides everything
     if (isChannelWhitelisted(video.channel)) {
       return { hide: false, reason: "" };
+    }
+
+    // User dislike signal: hide channels marked down ≥ 2 times
+    if (getChannelSignal(video.channel) <= -2) {
+      return { hide: true, reason: "Disliked channel" };
     }
 
     if (hideShorts && video.isShort) {
@@ -395,6 +444,127 @@
     return (el.innerText || el.textContent || "").trim();
   }
 
+  // --- Signal buttons (👍 / 👎) ---
+  var SIGNAL_CSS =
+    ".algocontrol-signals {" +
+    "  position: absolute; top: 6px; left: 6px;" +
+    "  display: flex; gap: 4px;" +
+    "  opacity: 0; transition: opacity 0.15s;" +
+    "  z-index: 100; pointer-events: none;" +
+    "}" +
+    "ytd-rich-item-renderer:hover .algocontrol-signals," +
+    "yt-lockup-view-model:hover .algocontrol-signals," +
+    "ytd-video-renderer:hover .algocontrol-signals," +
+    "ytd-compact-video-renderer:hover .algocontrol-signals {" +
+    "  opacity: 1; pointer-events: auto;" +
+    "}" +
+    ".algocontrol-signals.algocontrol-active { opacity: 1; pointer-events: auto; }" +
+    ".algocontrol-sig {" +
+    "  background: rgba(0,0,0,0.75);" +
+    "  border: 1px solid rgba(255,255,255,0.25);" +
+    "  border-radius: 4px;" +
+    "  width: 28px; height: 28px;" +
+    "  font-size: 14px; line-height: 1;" +
+    "  cursor: pointer; padding: 0;" +
+    "  display: flex; align-items: center; justify-content: center;" +
+    "  color: #fff;" +
+    "}" +
+    ".algocontrol-sig:hover { background: rgba(0,0,0,0.9); transform: scale(1.08); }" +
+    ".algocontrol-sig-up.active { background: rgba(45, 158, 95, 0.9); border-color: #2d9e5f; }" +
+    ".algocontrol-sig-down.active { background: rgba(204, 51, 51, 0.9); border-color: #c33; }";
+
+  function injectStaticCss() {
+    if (document.getElementById("algocontrol-static-css")) return;
+    var s = document.createElement("style");
+    s.id = "algocontrol-static-css";
+    s.textContent = SIGNAL_CSS;
+    (document.head || document.documentElement).appendChild(s);
+  }
+
+  function findThumbnailContainer(card) {
+    // Prefer the thumbnail wrapper so positioning is relative to it
+    return (
+      card.querySelector("ytd-thumbnail") ||
+      card.querySelector("yt-thumbnail-view-model") ||
+      card.querySelector("yt-image") ||
+      card.querySelector("#thumbnail") ||
+      null
+    );
+  }
+
+  function injectSignalButtons(card, channelName) {
+    if (!channelName) return;
+    var existing = card.querySelector(".algocontrol-signals");
+    if (existing) {
+      existing.dataset.channel = channelName;
+      updateSignalButtonState(card, channelName);
+      return;
+    }
+    var thumb = findThumbnailContainer(card);
+    if (!thumb) return;
+
+    // Ensure parent is positioned (most thumbnails already are, but be safe)
+    var cs = window.getComputedStyle(thumb);
+    if (cs.position === "static") thumb.style.position = "relative";
+
+    var wrap = document.createElement("div");
+    wrap.className = "algocontrol-signals";
+    wrap.dataset.channel = channelName;
+
+    var up = document.createElement("button");
+    up.type = "button";
+    up.className = "algocontrol-sig algocontrol-sig-up";
+    up.title = "Show more from " + channelName;
+    up.textContent = "👍"; // 👍
+    up.addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var ch = wrap.dataset.channel;
+      applyChannelSignal(ch, +1);
+      updateAllButtonsForChannel(ch);
+    });
+
+    var down = document.createElement("button");
+    down.type = "button";
+    down.className = "algocontrol-sig algocontrol-sig-down";
+    down.title = "Show less from " + channelName;
+    down.textContent = "👎"; // 👎
+    down.addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var ch = wrap.dataset.channel;
+      applyChannelSignal(ch, -1);
+      updateAllButtonsForChannel(ch);
+    });
+
+    wrap.appendChild(up);
+    wrap.appendChild(down);
+    thumb.appendChild(wrap);
+    updateSignalButtonState(card, channelName);
+  }
+
+  function updateSignalButtonState(card, channelName) {
+    var wrap = card.querySelector(".algocontrol-signals");
+    if (!wrap) return;
+    var sig = getChannelSignal(channelName);
+    var up = wrap.querySelector(".algocontrol-sig-up");
+    var down = wrap.querySelector(".algocontrol-sig-down");
+    if (up) up.classList.toggle("active", sig > 0);
+    if (down) down.classList.toggle("active", sig < 0);
+    // Keep visible while a signal is set so the user can see/undo at a glance
+    wrap.classList.toggle("algocontrol-active", sig !== 0);
+  }
+
+  function updateAllButtonsForChannel(channelName) {
+    if (!channelName) return;
+    var safe = (channelName + "").replace(/"/g, '\\"');
+    var wraps = document.querySelectorAll('.algocontrol-signals[data-channel="' + safe + '"]');
+    for (var i = 0; i < wraps.length; i++) {
+      var card = wraps[i].closest("ytd-rich-item-renderer, yt-lockup-view-model, ytd-video-renderer, ytd-compact-video-renderer") || wraps[i];
+      updateSignalButtonState(card, channelName);
+    }
+  }
+
   function extractDurationFromCard(card) {
     // Duration text is in the time-status overlay on the thumbnail
     var el = card.querySelector(
@@ -501,23 +671,32 @@
 
     // API data path — evaluate with current preferences
     if (videoId && videoDataMap[videoId]) {
-      var decision = shouldHideVideo(videoDataMap[videoId]);
+      var video = videoDataMap[videoId];
+      injectSignalButtons(card, video.channel);
+      var decision = shouldHideVideo(video);
       if (decision.hide) {
         hideCard(card, decision.reason);
         return;
       }
-      // Duration check for API videos (shouldHideVideo already handles this,
-      // but re-confirm nothing was missed)
       showCard(card);
+      updateSignalButtonState(card, video.channel);
       return;
     }
 
     // DOM fallback path
     var channel = extractChannelFromCard(card);
+    injectSignalButtons(card, channel);
 
     // Whitelist check first
     if (isChannelWhitelisted(channel)) {
       showCard(card);
+      updateSignalButtonState(card, channel);
+      return;
+    }
+
+    // User dislike signal
+    if (getChannelSignal(channel) <= -2) {
+      hideCard(card, "Disliked channel");
       return;
     }
 
@@ -736,6 +915,7 @@
   });
 
   // --- Init ---
+  injectStaticCss();
   loadPreferences().then(function () {
     observeFeed();
     setTimeout(applyFiltersToDOM, 1500);
