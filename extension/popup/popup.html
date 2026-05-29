@@ -202,6 +202,42 @@
       color: #5dba87;
     }
 
+    .tag.tag-signal-up {
+      background: #1a2e22;
+      border: 1px solid #2d9e5f44;
+      color: #5dba87;
+    }
+
+    .tag.tag-signal-down {
+      background: #2e1a1a;
+      border: 1px solid #c3333344;
+      color: #d97474;
+    }
+
+    .signal-group { margin-bottom: 8px; }
+    .signal-group:last-child { margin-bottom: 0; }
+    .signal-label {
+      color: #888;
+      font-size: 11px;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .signal-count {
+      background: #272727;
+      color: #aaa;
+      padding: 1px 6px;
+      border-radius: 8px;
+      font-size: 10px;
+    }
+    .signal-score {
+      color: #888;
+      font-size: 10px;
+      margin-left: 3px;
+      opacity: 0.7;
+    }
+
     .tag-remove {
       cursor: pointer;
       color: #666;
@@ -308,6 +344,19 @@
       <button class="btn btn-add-green" id="addWhitelist">Add</button>
     </div>
     <div class="tag-list" id="whitelistTags"></div>
+  </div>
+
+  <!-- Channel Signals (More/Less like this) -->
+  <div class="section">
+    <div class="section-title">Channel Signals <span style="color:#888;font-size:10px;font-weight:400;text-transform:none">(from 👍 / 👎 on videos)</span></div>
+    <div class="signal-group">
+      <div class="signal-label">Boosted <span class="signal-count" id="boostedCount">0</span></div>
+      <div class="tag-list" id="boostedTags"></div>
+    </div>
+    <div class="signal-group">
+      <div class="signal-label">Suppressed <span class="signal-count" id="suppressedCount">0</span></div>
+      <div class="tag-list" id="suppressedTags"></div>
+    </div>
   </div>
 
   <div class="status-bar">
