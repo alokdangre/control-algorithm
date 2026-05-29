@@ -18,6 +18,10 @@
   var whitelistInput  = document.getElementById("whitelistInput");
   var addWhitelistBtn = document.getElementById("addWhitelist");
   var whitelistTags   = document.getElementById("whitelistTags");
+  var boostedTags     = document.getElementById("boostedTags");
+  var suppressedTags  = document.getElementById("suppressedTags");
+  var boostedCount    = document.getElementById("boostedCount");
+  var suppressedCount = document.getElementById("suppressedCount");
   var hiddenCount     = document.getElementById("hiddenCount");
   var totalCount      = document.getElementById("totalCount");
   var trackedCount    = document.getElementById("trackedCount");
@@ -33,6 +37,7 @@
     hidePremieres: false,
     minDurationSec: 0,
     maxDurationSec: 0,
+    channelSignals: {},
   };
 
   var prefs = Object.assign({}, DEFAULTS);
@@ -50,8 +55,53 @@
       renderTags(keywordTags,   prefs.blockedKeywords,    "keyword");
       renderTags(channelTags,   prefs.blockedChannels,    "channel");
       renderTags(whitelistTags, prefs.whitelistedChannels, "whitelist");
+      renderSignals(prefs.channelSignals || {});
       updateStatus();
     });
+  }
+
+  function renderSignals(signals) {
+    var boosted = [];
+    var suppressed = [];
+    Object.keys(signals).forEach(function (name) {
+      var score = signals[name];
+      if (score > 0) boosted.push({ name: name, score: score });
+      else if (score < 0) suppressed.push({ name: name, score: score });
+    });
+    boosted.sort(function (a, b) { return b.score - a.score; });
+    suppressed.sort(function (a, b) { return a.score - b.score; });
+
+    boostedCount.textContent = boosted.length;
+    suppressedCount.textContent = suppressed.length;
+
+    renderSignalList(boostedTags, boosted, "signal-up");
+    renderSignalList(suppressedTags, suppressed, "signal-down");
+  }
+
+  function renderSignalList(container, items, cls) {
+    if (!items.length) {
+      container.innerHTML = '<span class="empty-msg">None yet</span>';
+      return;
+    }
+    container.innerHTML = "";
+    items.forEach(function (item) {
+      var tag = document.createElement("span");
+      tag.className = "tag tag-" + cls;
+      tag.innerHTML =
+        escapeHtml(item.name) +
+        '<span class="signal-score">' + (item.score > 0 ? "+" : "") + item.score + '</span>' +
+        ' <span class="tag-remove" data-type="signal" data-name="' + escapeAttr(item.name) + '">&times;</span>';
+      container.appendChild(tag);
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function escapeAttr(s) {
+    return String(s).replace(/"/g, "&quot;");
   }
 
   function savePrefs() {
@@ -90,7 +140,17 @@
   // --- Remove tag ---
   document.addEventListener("click", function (e) {
     if (!e.target.classList.contains("tag-remove")) return;
-    var type  = e.target.dataset.type;
+    var type = e.target.dataset.type;
+
+    if (type === "signal") {
+      var name = e.target.dataset.name;
+      if (!name || !prefs.channelSignals) return;
+      delete prefs.channelSignals[name];
+      renderSignals(prefs.channelSignals);
+      savePrefs();
+      return;
+    }
+
     var index = parseInt(e.target.dataset.index, 10);
     var map   = { keyword: "blockedKeywords", channel: "blockedChannels", whitelist: "whitelistedChannels" };
     var tagsMap = { keyword: keywordTags, channel: channelTags, whitelist: whitelistTags };
@@ -98,6 +158,13 @@
     prefs[map[type]].splice(index, 1);
     renderTags(tagsMap[type], prefs[map[type]], type);
     savePrefs();
+  });
+
+  // Live-refresh when signals change in another tab/page (e.g. user clicks 👍 on YouTube while popup open)
+  chrome.storage.onChanged.addListener(function (changes, area) {
+    if (area !== "local" || !changes.channelSignals) return;
+    prefs.channelSignals = changes.channelSignals.newValue || {};
+    renderSignals(prefs.channelSignals);
   });
 
   // --- Duration change ---
